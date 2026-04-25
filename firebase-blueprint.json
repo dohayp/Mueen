@@ -1,0 +1,106 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile with roles (client, provider, admin)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "fullName": { "type": "string" },
+        "role": { "type": "string", "enum": ["client", "provider", "admin"] },
+        "city": { "type": "string" },
+        "neighborhood": { "type": "string" },
+        "isVerified": { "type": "boolean" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "bio": { "type": "string" },
+        "skills": { "type": "array", "items": { "type": "string" } },
+        "portfolioUrls": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role", "city", "neighborhood"]
+    },
+    "PrivateUserInfo": {
+      "title": "Private User PII",
+      "description": "Sensitive information like National ID for KYC",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "nationalIdUrl": { "type": "string" },
+        "phone": { "type": "string" },
+        "isKycApproved": { "type": "boolean" }
+      },
+      "required": ["userId"]
+    },
+    "Job": {
+      "title": "Job Posting",
+      "description": "Job request or active task",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "providerId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "active", "completed", "cancelled"] },
+        "city": { "type": "string" },
+        "neighborhood": { "type": "string" },
+        "photoUrls": { "type": "array", "items": { "type": "string" } },
+        "voiceNoteUrl": { "type": "string" },
+        "estimatedPrice": { "type": "string" },
+        "finalPrice": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "title", "category", "status", "city", "neighborhood"]
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "Messaging thread between client and provider",
+      "type": "object",
+      "properties": {
+        "jobId": { "type": "string" },
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "lastMessage": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["participants", "updatedAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Individual message in a chat",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["chatId", "senderId", "text", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Public user profiles"
+    },
+    "/users/{userId}/private/info": {
+      "schema": "PrivateUserInfo",
+      "description": "Isolated PII for KYC"
+    },
+    "/jobs/{jobId}": {
+      "schema": "Job",
+      "description": "Service requests and tasks"
+    },
+    "/chats/{chatId}": {
+      "schema": "Chat",
+      "description": "Conversation metadata"
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Messaging history"
+    }
+  }
+}

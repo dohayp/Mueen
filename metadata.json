@@ -1,0 +1,13 @@
+{
+  "name": "Mueen Yemen",
+  "description": "A mobile-first on-demand professional service marketplace for Yemen, optimized for low bandwidth with Arabic RTL support and AI pricing estimation.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "real_time_chat",
+    "kyc_verification",
+    "ai_pricing_estimator"
+  ]
+}

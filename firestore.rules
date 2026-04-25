@@ -1,0 +1,132 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 0.3 Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // --- Users Collection ---
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.fullName is string && data.fullName.size() <= 100 &&
+               data.role in ['client', 'provider', 'admin'] &&
+               data.city is string && data.city.size() <= 50 &&
+               data.neighborhood is string && data.neighborhood.size() <= 50;
+      }
+
+      allow read: if isSignedIn();
+      
+      allow create: if isSignedIn() && isOwner(userId) && isValidUser(incoming()) && 
+                    incoming().role != 'admin' && // Can't self-promote to admin
+                    incoming().isVerified == false; // Initial verification state
+
+      allow update: if isSignedIn() && (
+        isAdmin() || 
+        (isOwner(userId) && isValidUser(incoming()) && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'city', 'neighborhood', 'bio', 'skills', 'portfolioUrls']) &&
+         existing().role == incoming().role // Role immutability for clients/providers
+        )
+      );
+      
+      // Private Info Subcollection (Isolated PII)
+      match /private/info {
+        function isValidPrivate(data) {
+          return data.phone is string && data.phone.size() <= 20 &&
+                 (data.nationalIdUrl == null || data.nationalIdUrl is string);
+        }
+
+        allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
+        
+        allow write: if isSignedIn() && isOwner(userId) && isValidPrivate(incoming());
+      }
+    }
+
+    // --- Jobs Collection ---
+    match /jobs/{jobId} {
+      function isValidJob(data) {
+        return data.title is string && data.title.size() <= 200 &&
+               data.clientId == request.auth.uid &&
+               data.status in ['pending', 'active', 'completed', 'cancelled'] &&
+               data.category is string &&
+               data.city is string &&
+               data.neighborhood is string;
+      }
+
+      allow read: if isSignedIn() && (
+        resource.data.clientId == request.auth.uid || 
+        resource.data.providerId == request.auth.uid ||
+        isAdmin() ||
+        (resource.data.status == 'pending' && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'provider')
+      );
+
+      allow create: if isSignedIn() && isValidId(jobId) && isValidJob(incoming()) &&
+                    incoming().status == 'pending';
+
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        // Action: Accept Job (Provider)
+        (existing().status == 'pending' && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['providerId', 'status', 'updatedAt']) &&
+         incoming().status == 'active' &&
+         incoming().providerId == request.auth.uid &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'provider') ||
+        // Action: Complete/Cancel (Client or Provider depending on logic)
+        (isOwner(existing().clientId) && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'finalPrice']) &&
+         incoming().status in ['completed', 'cancelled']) ||
+        (isOwner(existing().providerId) && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'finalPrice']) &&
+         incoming().status in ['completed', 'cancelled'])
+      );
+    }
+
+    // --- Chats Collection ---
+    match /chats/{chatId} {
+      allow read: if isSignedIn() && (request.auth.uid in resource.data.participants);
+      
+      allow create: if isSignedIn() && isValidId(chatId) && 
+                    (request.auth.uid in incoming().participants);
+
+      allow update: if isSignedIn() && (request.auth.uid in existing().participants) &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'updatedAt']);
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && (request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
+        
+        allow create: if isSignedIn() && incoming().senderId == request.auth.uid &&
+                      (request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
+      }
+    }
+  }
+}
